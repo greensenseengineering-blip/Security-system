@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TURVAJÄRJESTELMÄ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .grid-monitor { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .monitor-pane { background: #000; border: 2px solid #334155; position: relative; aspect-ratio: 4/3; cursor: pointer; transition: all 0.2s; }
+        .monitor-pane.active { border-color: #f43f5e; box-shadow: 0 0 15px rgba(244, 63, 94, 0.5); }
+        .monitor-pane.locked { border-color: #22d3ee; }
+        .alert-flash { animation: flash 1s infinite; }
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <h1 class="text-2xl font-bold text-red-500 uppercase tracking-widest">TURVAJÄRJESTELMÄ</h1>
+            <div id="statusIndicator" class="px-4 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-400 font-mono text-sm">SYSTEM: ONLINE</div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div class="lg:col-span-3 grid-monitor" id="monitorGrid">
+                <canvas id="cam0" class="monitor-pane" onclick="toggleLock(0)"></canvas>
+                <canvas id="cam1" class="monitor-pane" onclick="toggleLock(1)"></canvas>
+                <canvas id="cam2" class="monitor-pane" onclick="toggleLock(2)"></canvas>
+                <canvas id="cam3" class="monitor-pane" onclick="toggleLock(3)"></canvas>
+            </div>
+            
+            <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 h-[600px] flex flex-col">
+                <h2 class="text-sm font-bold text-slate-400 mb-2 uppercase">System Log</h2>
+                <div id="log" class="flex-1 overflow-y-auto font-mono text-[10px] space-y-1 text-slate-300"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const camNames = ["PORTTI", "VARASTO", "KÄYTÄVÄ", "TOIMISTO"];
+        const canvasIds = ["cam0", "cam1", "cam2", "cam3"];
+        const locks = [false, false, false, false];
+        let redAlert = false;
+
+        const cameraData = canvasIds.map(() => Array.from({length: 3}, () => ({
+            x: Math.random() * 300, y: Math.random() * 200,
+            vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2,
+            risk: Math.random()
+        })));
+
+        function toggleLock(i) {
+            locks[i] = !locks[i];
+            log(`[USER] Camera ${camNames[i]} ${locks[i] ? 'LOCKED' : 'UNLOCKED'}`);
+        }
+
+        function log(msg) {
+            const div = document.createElement('div');
+            div.textContent = `> ${new Date().toLocaleTimeString()} ${msg}`;
+            const logEl = document.getElementById('log');
+            logEl.prepend(div);
+        }
+
+        function draw() {
+            let maxRisk = 0;
+            let highestRiskIdx = 0;
+
+            canvasIds.forEach((id, i) => {
+                const canvas = document.getElementById(id);
+                const ctx = canvas.getContext('2d');
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+                
+                ctx.fillStyle = "#020617";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                cameraData[i].forEach(obj => {
+                    obj.x += obj.vx;
+                    obj.y += obj.vy;
+                    if(obj.x < 0 || obj.x > canvas.width) obj.vx *= -1;
+                    if(obj.y < 0 || obj.y > canvas.height) obj.vy *= -1;
+                    
+                    obj.risk = Math.min(1, Math.max(0, obj.risk + (Math.random()-0.5)*0.1));
+                    
+                    ctx.strokeStyle = obj.risk > 0.7 ? '#f43f5e' : '#22d3ee';
+                    ctx.strokeRect(obj.x, obj.y, 40, 40);
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.fillText(`ID:${Math.floor(obj.x)} R:${obj.risk.toFixed(2)}`, obj.x, obj.y - 5);
+
+                    if(obj.risk > maxRisk) { maxRisk = obj.risk; highestRiskIdx = i; }
+                });
+
+                ctx.fillStyle = "#fff";
+                ctx.fillText(camNames[i], 10, 20);
+                canvas.className = `monitor-pane ${locks[i] ? 'locked' : ''} ${i === highestRiskIdx ? 'active' : ''}`;
+            });
+
+            if(maxRisk > 0.8 && !redAlert) {
+                redAlert = true;
+                log(`[CRITICAL] RED ALERT: High risk detected in ${camNames[highestRiskIdx]}`);
+                document.body.classList.add('alert-flash');
+            } else if (maxRisk <= 0.8 && redAlert) {
+                redAlert = false;
+                document.body.classList.remove('alert-flash');
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+    </script>
+</body>
+</html>
